@@ -2,6 +2,24 @@
 import "dotenv/config";
 import { MongoClient } from "mongodb";
 
+// Free-to-use photos (Pexels / Unsplash license), grouped by category
+const px = (id) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=1000`;
+const un = (id) => `https://images.unsplash.com/photo-${id}?q=80&w=1000&auto=format&fit=crop`;
+
+const pics = {
+  "Photo Studio": [px(134469), px(7383646), px(25526512), px(4268512), px(4123848)],
+  "Film Stage": [px(3935023), px(4170572), px(8389883), px(7513459), px(6621416)],
+  "Podcast Lounge": [px(5083607), px(5083605), px(5083606), px(765139)],
+  "Music Suite": [un("1781865202629-c0ab5921973b"), un("1636226489684-07212bc4e1ac")],
+  // TODO: replace with a real art studio photo link (placeholder for now)
+  "Workshop": [
+    "https://picsum.photos/seed/art1/1000/700",
+    "https://picsum.photos/seed/art2/1000/700",
+    "https://picsum.photos/seed/art3/1000/700",
+  ],
+};
+const used = {};
+
 const comments = [
   "Clean space, great natural light and the host was very helpful.",
   "Everything was ready when we arrived. Easy booking and fair price.",
@@ -37,21 +55,22 @@ const base = [
     "A compact podcast room for solo or duo recordings with acoustic panels and two microphones."],
 ];
 
-const docs = base.map(([title, category, hourlyRate, securityDeposit, capacity, location, rating, amenities, overview], i) => ({
-  title, category, hourlyRate, securityDeposit, capacity, location, rating, amenities, overview,
-  image: `https://picsum.photos/seed/studio${i + 1}/800/600`,
-  gallery: [
-    `https://picsum.photos/seed/studio${i + 1}a/800/600`,
-    `https://picsum.photos/seed/studio${i + 1}b/800/600`,
-  ],
-  reviews: [
-    { name: "Rafi Ahmed", rating: 5, comment: comments[i % 4] },
-    { name: "Nusrat Jahan", rating: 4, comment: comments[(i + 1) % 4] },
-  ],
-  ownerEmail: "host@studiospace.com",
-  ownerName: "StudioSpace Host",
-  createdAt: new Date(Date.now() - i * 86400000),
-}));
+const docs = base.map(([title, category, hourlyRate, securityDeposit, capacity, location, rating, amenities, overview], i) => {
+  const list = pics[category];
+  const n = (used[category] = (used[category] ?? -1) + 1) * 2; // different photo for each studio of the same category
+  return {
+    title, category, hourlyRate, securityDeposit, capacity, location, rating, amenities, overview,
+    image: list[n % list.length],
+    gallery: [list[(n + 1) % list.length], list[(n + 2) % list.length]],
+    reviews: [
+      { name: "Rafi Ahmed", rating: 5, comment: comments[i % 4] },
+      { name: "Nusrat Jahan", rating: 4, comment: comments[(i + 1) % 4] },
+    ],
+    ownerEmail: "host@studiospace.com",
+    ownerName: "StudioSpace Host",
+    createdAt: new Date(Date.now() - i * 86400000),
+  };
+});
 
 const client = new MongoClient(process.env.MONGODB_URI);
 await client.connect();
