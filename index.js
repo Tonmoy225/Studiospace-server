@@ -248,12 +248,17 @@ app.patch("/api/bookings/:id/status", verifyJWT, async (req, res) => {
   res.json({ success: true });
 });
 
+
+// ---------- error handler (always send JSON) ----------
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ message: "Internal server error" });
+});
+
 // ---------- start ----------
 const PORT = process.env.PORT || 5000;
-client
-  .connect()
-  .then(() => {
-    console.log("MongoDB connected");
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch((err) => console.error("MongoDB connection failed:", err));
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+export default app;
