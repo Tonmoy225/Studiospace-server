@@ -14,6 +14,7 @@ const client = new MongoClient(process.env.MONGODB_URI);
 const db = client.db("studiospace");
 const studios = db.collection("studios");
 const bookings = db.collection("bookings");
+const wishlist = db.collection("wishlist");
 
 // ---------- Challenge 1: JWT (HTTPOnly cookie) middleware ----------
 const verifyJWT = (req, res, next) => {
@@ -247,7 +248,49 @@ app.patch("/api/bookings/:id/status", verifyJWT, async (req, res) => {
   await bookings.updateOne({ _id: booking._id }, { $set: { status } });
   res.json({ success: true });
 });
+// ================= CHALLENGE 2 helper: confirmed slots of a studio on a date =================
+app.get("/api/studios/:id/booked", async (req, res) => {
+  const { date } = req.query;
+  if (!validId(req.params.id) || !date) return res.json([]);
+  const list = await bookings
+    .find({ studioId: req.params.id, date, status: "Confirmed" })
+    .project({ _id: 0, startTime: 1, endTime: 1 })
+    .sort({ startTime: 1 })
+    .toArray();
+  res.json(list);
+});
 
+// ================= OPTIONAL: SAVED STUDIOS WISHLIST =================
+
+// ids only (used to colour the heart icons)
+app.get("/api/wishlist/ids", verifyJWT, async (req, res) => {
+  const list = await wishlist.find({ userEmail: req.user.email }).toArray();
+  res.json(list.map((w) => w.studioId));
+});
+
+// full studios (used by the Saved Studios page)
+app.get("/api/wishlist", verifyJWT, async (req, res) => {
+  const list = await wishlist.find({ userEmail: req.user.email }).sort({ createdAt: -1 }).toArray();
+  const ids = list.filter((w) => validId(w.studioId)).map((w) => new ObjectId(w.studioId));
+  res.json(await studios.find({ _id: { $in: ids } }).toArray());
+});
+
+// save a studio (no duplicates because of upsert)
+app.post("/api/wishlist/:studioId", verifyJWT, async (req, res) => {
+  if (!validId(req.params.studioId)) return res.status(400).json({ message: "Invalid studio id" });
+  await wishlist.updateOne(
+    { userEmail: req.user.email, studioId: req.params.studioId },
+    { $setOnInsert: { createdAt: new Date() } },
+    { upsert: true }
+  );
+  res.status(201).json({ saved: true });
+});
+
+// remove from saved
+app.delete("/api/wishlist/:studioId", verifyJWT, async (req, res) => {
+  await wishlist.deleteOne({ userEmail: req.user.email, studioId: req.params.studioId });
+  res.json({ saved: false });
+});
 
 // ---------- error handler (always send JSON) ----------
 app.use((err, req, res, next) => {
