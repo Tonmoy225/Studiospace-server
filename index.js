@@ -165,7 +165,7 @@ app.post("/api/bookings", verifyJWT, async (req, res) => {
     });
   }
 
-  const hours = (toMin(endTime) - toMin(startTime)) / 60;
+  const hours = Math.round(((toMin(endTime) - toMin(startTime)) / 60) * 100) / 100;
   const doc = {
     studioId,
     studioTitle: studio.title,
@@ -175,7 +175,7 @@ app.post("/api/bookings", verifyJWT, async (req, res) => {
     startTime,
     endTime,
     hours,
-    totalPrice: hours * studio.hourlyRate,
+    totalPrice: Math.round(hours * studio.hourlyRate * 100) / 100,
     ownerEmail: studio.ownerEmail,
     userEmail: req.user.email,
     userName: req.user.name,
