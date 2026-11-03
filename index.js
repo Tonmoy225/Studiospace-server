@@ -155,13 +155,28 @@ app.post("/api/bookings", verifyJWT, async (req, res) => {
   const clash = await bookings.findOne({
     studioId,
     date,
-    status: "Confirmed",
+    status: { $in: ["Confirmed", "Completed"] },
     startTime: { $lt: endTime },
     endTime: { $gt: startTime },
   });
   if (clash) {
     return res.status(409).json({
       message: `This slot overlaps a confirmed booking (${clash.startTime} - ${clash.endTime}). Please choose another time.`,
+    });
+  }
+
+  // the same user cannot send a second request for an overlapping time while the first is still pending
+  const myPending = await bookings.findOne({
+    studioId,
+    date,
+    userEmail: req.user.email,
+    status: "Pending",
+    startTime: { $lt: endTime },
+    endTime: { $gt: startTime },
+  });
+  if (myPending) {
+    return res.status(409).json({
+      message: `You already have a pending request for this studio at an overlapping time (${myPending.startTime} - ${myPending.endTime}).`,
     });
   }
 
@@ -235,7 +250,7 @@ app.patch("/api/bookings/:id/status", verifyJWT, async (req, res) => {
       _id: { $ne: booking._id },
       studioId: booking.studioId,
       date: booking.date,
-      status: "Confirmed",
+      status: { $in: ["Confirmed", "Completed"] },
       startTime: { $lt: booking.endTime },
       endTime: { $gt: booking.startTime },
     });
@@ -248,12 +263,13 @@ app.patch("/api/bookings/:id/status", verifyJWT, async (req, res) => {
   await bookings.updateOne({ _id: booking._id }, { $set: { status } });
   res.json({ success: true });
 });
+
 // ================= CHALLENGE 2 helper: confirmed slots of a studio on a date =================
 app.get("/api/studios/:id/booked", async (req, res) => {
   const { date } = req.query;
   if (!validId(req.params.id) || !date) return res.json([]);
   const list = await bookings
-    .find({ studioId: req.params.id, date, status: "Confirmed" })
+    .find({ studioId: req.params.id, date, status: { $in: ["Confirmed", "Completed"] } })
     .project({ _id: 0, startTime: 1, endTime: 1 })
     .sort({ startTime: 1 })
     .toArray();
@@ -299,6 +315,8 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- start ----------
+// MongoDB connects automatically on the first query (works on Vercel serverless too).
+// Locally we listen on a port; on Vercel the exported app is used instead.
 const PORT = process.env.PORT || 5000;
 if (!process.env.VERCEL) {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
